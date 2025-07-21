@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract NumberGuessingGame is Ownable {
+    // Game state
+    uint256 private targetNumber; // The number to guess (1-100)
+    mapping(address => uint256) public playerScores; // Player address to score
+    uint256 public constant MAX_NUMBER = 100;
+
+    // Events
+    event GameReset(uint256 newTargetNumber);
+    event GuessMade(address indexed player, uint256 guess, bool isCorrect, uint256 score);
+    
+    constructor() Ownable(msg.sender) {
+        // Initialize with a pseudo-random number
+        targetNumber = (uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender))) % MAX_NUMBER) + 1;
+    }
+
+    // Make a guess
+    function guess(uint256 number) external {
+        require(number >= 1 && number <= MAX_NUMBER, "Guess must be between 1 and 100");
+
+        bool isCorrect = (number == targetNumber);
+        if (isCorrect) {
+            playerScores[msg.sender] += 1;
+        }
+
+        emit GuessMade(msg.sender, number, isCorrect, playerScores[msg.sender]);
+    }
+
+    // Reset the game with a new target number (owner only)
+    function resetGame() external onlyOwner {
+        targetNumber = (uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender))) % MAX_NUMBER) + 1;
+        emit GameReset(targetNumber);
+    }
+
+    // Get player's score
+    function getScore(address player) external view returns (uint256) {
+        return playerScores[player];
+    }
+
+    // Get game state (for testing; in production, avoid exposing targetNumber)
+    function getTargetNumber() external view onlyOwner returns (uint256) {
+        return targetNumber;
+    }
+}
