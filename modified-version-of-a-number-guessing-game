@@ -1,0 +1,198 @@
+import tkinter as tk
+from tkinter import messagebox, ttk
+import random
+import sqlite3
+from datetime import datetime
+import pygame
+import time
+
+class NumberGuessingGame:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Advanced Number Guessing Game")
+        self.root.geometry("400x500")
+
+        # Initialize Pygame for sound
+        pygame.mixer.init()
+
+        # Game variables
+        self.RANGES = {"Easy": (1, 50), "Medium": (1, 100), "Hard": (1, 500)}
+        self.difficulty = "Medium"
+        self.target_number = None
+        self.attempts = 0
+        self.start_time = None
+        self.score = 0
+        self.game_active = False
+        self.hint_count = 0
+
+        # Initialize SQLite database
+        self.conn = sqlite3.connect("number_guessing_scores.db")
+        self.create_table()
+
+        # GUI Elements
+        tk.Label(root, text="Number Guessing Game", font=("Arial", 16, "bold")).pack(pady=10)
+
+        # Difficulty selection
+        tk.Label(root, text="Select Difficulty:", font=("Arial", 12)).pack(pady=5)
+        self.difficulty_var = tk.StringVar(value="Medium")
+        ttk.Combobox(root, textvariable=self.difficulty_var, values=["Easy", "Medium", "Hard"], state="readonly").pack()
+
+        # Guess input
+        tk.Label(root, text="Enter your guess:", font=("Arial", 12)).pack(pady=5)
+        self.guess_entry = tk.Entry(root, font=("Arial", 14), justify="center")
+        self.guess_entry.pack(pady=5)
+
+        # Feedback display
+        self.feedback_var = tk.StringVar(value="Select difficulty and start the game!")
+        tk.Label(root, textvariable=self.feedback_var, font=("Arial", 12), wraplength=350).pack(pady=10)
+
+        # Score display
+        self.score_var = tk.StringVar(value="Score: 0")
+        tk.Label(root, textvariable=self.score_var, font=("Arial", 12)).pack(pady=5)
+
+        # Buttons
+        tk.Button(root, text="Start Game", command=self.start_game, font=("Arial", 12)).pack(pady=5)
+        tk.Button(root, text="Submit Guess", command=self.submit_guess, font=("Arial", 12)).pack(pady=5)
+        tk.Button(root, text="Get Hint", command=self.get_hint, font=("Arial", 12)).pack(pady=5)
+        tk.Button(root, text="View High Scores", command=self.view_high_scores, font=("Arial", 12)).pack(pady=5)
+
+        # Bind Enter key to submit guess
+        self.root.bind("<Return>", lambda event: self.submit_guess())
+
+    def create_table(self):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS highscores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                score INTEGER NOT NULL,
+                difficulty TEXT NOT NULL,
+                time_taken REAL NOT NULL,
+                date TEXT NOT NULL
+            )
+        ''')
+        self.conn.commit()
+
+    def start_game(self):
+        self.difficulty = self.difficulty_var.get()
+        min_num, max_num = self.RANGES[self.difficulty]
+        self.target_number = random.randint(min_num, max_num)
+        self.attempts = 0
+        self.hint_count = 0
+        self.score = 0
+        self.start_time = time.time()
+        self.game_active = True
+        self.feedback_var.set(f"Guess a number between {min_num} and {max_num}!")
+        self.score_var.set("Score: 0")
+        self.guess_entry.delete(0, tk.END)
+        self.guess_entry.config(bg="white")
+
+    def visual_feedback(self, correct=False):
+        # Flash the input field for visual feedback
+        color = "green" if correct else "red"
+        for _ in range(3):
+            self.guess_entry.config(bg=color)
+            self.root.update()
+            self.root.after(100)
+            self.guess_entry.config(bg="white")
+            self.root.update()
+            self.root.after(100)
+
+    def play_sound(self, type="error"):
+        try:
+            sound_file = "success.wav" if type == "success" else "error.wav"
+            pygame.mixer.Sound(sound_file).play()
+        except:
+            pass  # Skip sound if file not found
+
+    def submit_guess(self):
+        if not self.game_active:
+            messagebox.showwarning("Warning", "Start a new game first!")
+            return
+
+        guess = self.guess_entry.get().strip()
+        try:
+            guess = int(guess)
+            self.attempts += 1
+        except ValueError:
+            self.feedback_var.set("Please enter a valid number!")
+            self.visual_feedback(correct=False)
+            self.play_sound("error")
+            return
+
+        min_num, max_num = self.RANGES[self.difficulty]
+        if guess < min_num or guess > max_num:
+            self.feedback_var.set(f"Guess must be between {min_num} and {max_num}!")
+            self.visual_feedback(correct=False)
+            self.play_sound("error")
+            return
+
+        if guess == self.target_number:
+            time_taken = time.time() - self.start_time
+            # Calculate score: base score (1000 / attempts) + time bonus (1000 / time_taken)
+            self.score = int(1000 / self.attempts) + int(1000 / max(time_taken, 1)) - (self.hint_count * 50)
+            self.score = max(self.score, 0)  # Ensure score is non-negative
+            self.score_var.set(f"Score: {self.score}")
+            self.feedback_var.set(f"Correct! You guessed it in {self.attempts} attempts. Time: {time_taken:.1f}s")
+            self.visual_feedback(correct=True)
+            self.play_sound("success")
+            self.save_high_score(time_taken)
+            messagebox.showinfo("Congratulations", f"You won! Score: {self.score}\nHigh score saved!")
+            self.game_active = False
+        elif guess < self.target_number:
+            self.feedback_var.set("Too low! Try again.")
+            self.visual_feedback(correct=False)
+            self.play_sound("error")
+        else:
+            self.feedback_var.set("Too high! Try again.")
+            self.visual_feedback(correct=False)
+            self.play_sound("error")
+
+        self.guess_entry.delete(0, tk.END)
+
+    def get_hint(self):
+        if not self.game_active:
+            messagebox.showwarning("Warning", "Start a new game first!")
+            return
+
+        self.hint_count += 1
+        min_num, max_num = self.RANGES[self.difficulty]
+        range_size = (max_num - min_num) // 4
+        hint_min = max(min_num, self.target_number - range_size)
+        hint_max = min(max_num, self.target_number + range_size)
+        self.feedback_var.set(f"Hint: The number is between {hint_min} and {hint_max}.")
+        self.visual_feedback(correct=False)
+
+    def save_high_score(self, time_taken):
+        cursor = self.conn.cursor()
+        cursor.execute("INSERT INTO highscores (score, difficulty, time_taken, date) VALUES (?, ?, ?, ?)",
+                      (self.score, self.difficulty, time_taken, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        self.conn.commit()
+
+    def view_high_scores(self):
+        highscore_window = tk.Toplevel(self.root)
+        highscore_window.title("High Scores")
+        highscore_window.geometry("500x300")
+
+        tree = ttk.Treeview(highscore_window, columns=("Score", "Difficulty", "Time (s)", "Date"), show="headings")
+        tree.heading("Score", text="Score")
+        tree.heading("Difficulty", text="Difficulty")
+        tree.heading("Time (s)", text="Time (s)")
+        tree.heading("Date", text="Date")
+        tree.column("Score", width=100)
+        tree.column("Difficulty", width=100)
+        tree.column("Time (s)", width=100)
+        tree.column("Date", width=150)
+        tree.pack(fill="both", expand=True, padx=10, pady=10)
+
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT score, difficulty, time_taken, date FROM highscores ORDER BY score DESC LIMIT 10")
+        for row in cursor.fetchall():
+            tree.insert("", tk.END, values=(row[0], row[1], f"{row[2]:.1f}", row[3]))
+
+    def __del__(self):
+        self.conn.close()
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = NumberGuessingGame(root)
+    root.mainloop()
