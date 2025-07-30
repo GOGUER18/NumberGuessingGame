@@ -36,13 +36,4 @@ contract NumberGuessingGame is Ownable {
         emit GameReset(targetNumber);
     }
 
-    // Get player's score
-    function getScore(address player) external view returns (uint256) {
-        return playerScores[player];
-    }
-
-    // Get game state (for testing; in production, avoid exposing targetNumber)
-    function getTargetNumber() external view onlyOwner returns (uint256) {
-        return targetNumber;
-    }
-}
+  
