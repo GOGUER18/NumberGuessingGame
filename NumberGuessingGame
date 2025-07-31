@@ -9,18 +9,7 @@ contract NumberGuessingGame is Ownable {
     mapping(address => uint256) public playerScores; // Player address to score
     uint256 public constant MAX_NUMBER = 100;
 
-    // Events
-    event GameReset(uint256 newTargetNumber);
-    event GuessMade(address indexed player, uint256 guess, bool isCorrect, uint256 score);
     
-    constructor() Ownable(msg.sender) {
-        // Initialize with a pseudo-random number
-        targetNumber = (uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender))) % MAX_NUMBER) + 1;
-    }
-
-    // Make a guess
-    function guess(uint256 number) external {
-        require(number >= 1 && number <= MAX_NUMBER, "Guess must be between 1 and 100");
 
    
   
