@@ -22,18 +22,5 @@ contract NumberGuessingGame is Ownable {
     function guess(uint256 number) external {
         require(number >= 1 && number <= MAX_NUMBER, "Guess must be between 1 and 100");
 
-        bool isCorrect = (number == targetNumber);
-        if (isCorrect) {
-            playerScores[msg.sender] += 1;
-        }
-
-        emit GuessMade(msg.sender, number, isCorrect, playerScores[msg.sender]);
-    }
-
-    // Reset the game with a new target number (owner only)
-    function resetGame() external onlyOwner {
-        targetNumber = (uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender))) % MAX_NUMBER) + 1;
-        emit GameReset(targetNumber);
-    }
-
+   
   
